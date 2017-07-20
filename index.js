@@ -1245,12 +1245,13 @@ function startScheduledTasks(){
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-client.login('MjY1NDQ1MDAzMTc2ODM3MTIw.C0vOow.nul5Z83vH8W02S7FL_y-dSfl6Is');
+client.login('TOKEN');
+// TOKEN removed due to security issues. Input your own bot's token here!
+// https://discordapp.com/developers/docs/intro
 
 /*
 
 Michael Rooplall | DeveloperBlue
 
-MichaelRooplall@gmail.com
 
 */
