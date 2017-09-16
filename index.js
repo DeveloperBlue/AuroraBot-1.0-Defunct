@@ -27,7 +27,6 @@ const GoogleImages = require('google-images');
 	var cseAPIKey = "AIzaSyAa4nk1Ej-yVFtUqIrH3iUrQa8r9CJgJZQ";
 
 const gImagesClient = new GoogleImages(cseId, cseAPIKey);
-	var isSafeSearchOn = true;
 
 const randomPuppy = require('random-puppy');
 const yahooWeather = require('yql');
@@ -42,10 +41,38 @@ const archiver = require('archiver');
 // PREFERENCES /////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+let masterDiscordGuild = "246744125083353089" // This master guild will run the scheduled tasks
+let guildDataSet = [];
+let defaultPrefix = "!";
 
-let prefix = "!";
+function checkGuilds(guildId, doReturn, selfDetected){
 
-function shipCommands(location)
+	var guildId = "" + guildId;
+	var found = false;
+
+	for (var existingGuildId in guildDataSet) {
+		if (existingGuildId == guildId) {
+			found = true;
+			break
+		}
+	}
+
+	if (found == false){
+		guildDataSet[guildId] = [];
+		guildDataSet[guildId]["prefix"] = defaultPrefix;
+		guildDataSet[guildId]["unloved"] = null;
+
+		if (!selfDetected){
+			console.log("\(!) AuroraBot just created data for a new guild! GuildId: " + guildId);
+		}
+	}
+
+	if (doReturn){
+		return guildDataSet[guildId];
+	}
+}
+
+function shipCommands(location, prefix)
 {
 location.send("\n \ Hey there! I'm AuroraBot! \n\
 Prefix: **" + prefix + "** \n \
@@ -60,6 +87,8 @@ servers - Check if the Unturned and Minecraft servers are running \n \
 checkmem - Check the RAM usage of the desktop server \n \
 purge ['amount'] - Delete the last amount number of messages the same text channel. You must have a role Admin to use this \n \
 domath ['equation'] - Make WolframAlpha solve your equation \n \
+lifesupport - Have Dr.Seuss's 'Oh, the Places You'll Go!' poem recited to you \n \
+uptime - Get AuroraBot's uptime \n \
 \n \
 FUN \n \
 roll [('optional min no';) 'optional max no.'] - Roll a pair of dice between 1 and your optional maximum number or between a set minimum and maximum. Default is out of 10 \n \
@@ -78,7 +107,6 @@ safesearch [optional 'on'/'off'] - Check or toggle safesearch on the " + prefix 
 google (search) ['query'] - Google your query. \n \
 amazon ['query'] - Search Amazon for your query \n \
 youtube ['query'] - Search Youtube for your query \n \
-porn ['query'] - Seach a randomized porn site (Pornhub, XVid, RedTube, Motherless) for your query \n \
 anime ['query'] - Gets information and watchlinks on an anime with the name of your query. \n \
 ``` \n \n \
 ");
@@ -87,9 +115,15 @@ Alernatively, you can also have a terrible conversation with the bot by @mention
 ");
 }
 
-var unloved;
 var maxPurgeLimit = 30;
 var coinFlipFailChance = 100;
+
+/*
+
+Server refresing
+
+
+*/
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -143,10 +177,16 @@ function getRandomInt(min, max) {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 function connect(){
-	console.log(`${client.user.username} is online!`);
-	client.user.setGame("with your emotions | " + prefix + "cmds");
+	try {
+		console.log(`${client.user.username} is online!`);
+		client.user.setGame("with your emotions | " + defaultPrefix + "cmds");
 
-	startScheduledTasks();
+		startScheduledTasks();
+	}
+	catch (err){
+		console.log("--* Something went wrong:");
+		console.log(err)
+	}
 }
 
 client.on('ready', () => {
@@ -155,7 +195,11 @@ client.on('ready', () => {
 
 client.on('disconnect', () => {
 	console.log('AuroraBot was disconnected- Disconnect was successfully detected - will attempt to reconnect.');
-	connect();
+	// connect();
+})
+
+client.on('error', () => {
+	console.log("An error has occured.");
 })
 
 /*
@@ -173,11 +217,19 @@ client.on('message', (msg) => {
 	*/
 
 	try {
+
+		var guildId = msg.channel.guild.id;
+		var selfDetected = (client.user.id == msg.author.id)
+
+		var guildData = checkGuilds(guildId, true, selfDetected);
+
+		var prefix = guildData["prefix"];
+
 		var parseMessage = msg.content.toLowerCase();
 
 		if ((parseMessage.replace(/ /g, "") == "noonelovesme") || (parseMessage.replace(/ /g, "") == "nobodylovesme")){
 
-			if (msg.author == unloved){
+			if (msg.author == guildData["unloved"]){
 				msg.reply("This is correct");
 			}
 
@@ -191,7 +243,7 @@ client.on('message', (msg) => {
 		}
 		else if ((parseMessage.startsWith("unacceptable")) || (parseMessage.startsWith("this is unacceptable")) || (parseMessage.startsWith("unnacceptable")) || (parseMessage.startsWith("this is unnacceptable"))){
 
-			if (client.user.id == msg.author.id){
+			if (selfDetected){
 				console.log("Picked up a loop - breaking");
 				return;
 			}
@@ -213,7 +265,7 @@ client.on('message', (msg) => {
 
 		if (!parseMessage.startsWith(prefix)) return;
 
-		console.log( msg.author.username + " said " + msg.content);
+		console.log("["+guildId +"][" + msg.author.username + "]: " + msg.content);
 
 		parseMessage = prefix + parseMessage.charAt(1).toLowerCase() + parseMessage.slice(2);
 
@@ -298,9 +350,16 @@ client.on('message', (msg) => {
 					factRes.on("end", function() {
 
 						console.log("Querying: " + factOptions.host + factOptions.path);
-						fact = fact.match(/\[([^)]+)\]/)[1];
-						fact = fact.replace(/"/g,"");
-						console.log(fact);
+
+						fact = fact.match(/\[([^)]+)\]/); // [1]
+
+						if (fact == null){
+							fact = "The cat fact API is down at the moment ... Did you know that cats don't actually have 9 lives?"
+						}
+						else {
+							fact = fact.replace(/"/g,"");
+							console.log(fact)
+						}
 
 						complete();
 						
@@ -460,6 +519,16 @@ client.on('message', (msg) => {
 			
 		}
 
+		else if (parseMessage == prefix + "lifesupport") {
+			fs.readFile('Poem.txt', 'utf8', function (err,data) {
+				if (err) {
+					msg.reply("Uh oh! Life support's down at the moment. Stay strong!");
+					return console.log(err);
+				}
+				msg.reply(data);
+			});
+		}
+
 		else if (parseMessage == prefix + "games"){
 
 		msg.reply("Here are the following games I can launch:\n \nSay `"+prefix+"game title` to start a game.\n \
@@ -489,7 +558,7 @@ client.on('message', (msg) => {
 					msg.reply("Play a game of Battleship: \nhttps://battleship-game.org/en/");
 
 				} else if ((query == "cah") || (query == "cardsagainsthumanity")){
-					msg.reply("Play a game of Town of Salem: \nhttp://pyx-3.pretendyoure.xyz/zy/game.jsp");
+					msg.reply("Play a game of Cards Against Humanity: \nhttp://pyx-3.pretendyoure.xyz/zy/game.jsp");
 
 				} else if (query == "checkers"){
 					msg.reply("Play a game of Checkers: \nhttps://www.playok.com/en/checkers/");
@@ -567,7 +636,7 @@ client.on('message', (msg) => {
 
 					console.log(choices.length);
 
-					msg.channel.send("It chose . . . **" + choices[getRandomInt(0,choices.length-1)] + "**!")
+					msg.channel.send(":crystal_ball: It chose . . . **" + choices[getRandomInt(0,choices.length-1)] + "**!")
 
 				}, 1400);
 			})
@@ -589,6 +658,9 @@ client.on('message', (msg) => {
 				msg.reply("Only an Admin can use this command!");
 			}
 			
+		}
+		else if (parseMessage == prefix + "uptime") {
+			msg.reply("I've been up for " + client.user.uptime + " seconds!");
 		}
 		else if ((parseMessage == prefix + "server") || (parseMessage == prefix + "servers")) {
 
@@ -633,6 +705,74 @@ client.on('message', (msg) => {
 
 			
 		}
+
+		/*
+		var stageTwoAuthentication = [
+			server_a = false;
+			server_m = false;
+			server_u = false;
+		]
+
+		else if (parseMessage.startsWith(prefix + "restart")){
+
+			if (msg.member.roles.has(msg.guild.roles.find("name", "Admin").id)){
+
+				var query = parseForQuery(msg.content, ["restart"])
+				var isSecondAuthentication = false;
+
+				if (query == "-a") { // AuroraBot
+					isSecondAuthentication = stageTwoAuthentication[0];
+				} else if (query == "-m") { // Minecraft
+					isSecondAuthentication = stageTwoAuthentication[1];
+				} else if (query == "-u") { // Unturned
+					isSecondAuthentication = stageTwoAuthentication[2];
+				} else {
+					// Wrong server parameter
+					return;
+				}
+
+				if (isSecondAuthentication){
+
+					if (query == "-a") { // AuroraBot
+						stageTwoAuthentication[0] = false;
+					} else if (query == "-m") { // Minecraft
+						stageTwoAuthentication[1] = false;
+					} else if (query == "-u") { // Unturned
+						stageTwoAuthentication[2] = false;
+					}
+
+				} else {
+
+					msg.reply("**WARNING** \nRestarting a server can generally be a very buggy process. This can go horribly wrong. \
+						\n \n **DO NOT DO THIS MULTIPLE TIMES. PLEASE WAIT A MINIMUM OF 20 MINUTES BEFORE RESTARTING A SERVER.** \
+						\n \n Are you sure you would like to restart this server? Please retype the command to confirm.");
+
+					if (query == "-a") { // AuroraBot
+						stageTwoAuthentication[0] = true;
+					} else if (query == "-m") { // Minecraft
+						stageTwoAuthentication[1] = true;
+					} else if (query == "-u") { // Unturned
+						stageTwoAuthentication[2] = true;
+					}
+
+					setTimeout( function(){
+						if (query == "-a") && (stageTwoAuthentication[0] == true) { // AuroraBot
+							stageTwoAuthentication[0] = false;
+						} else if (query == "-m") && (stageTwoAuthentication[1] == true) { // Minecraft
+							stageTwoAuthentication[1] = false;
+						} else if (query == "-u") && (stageTwoAuthentication[2] == true) { // Unturned
+							stageTwoAuthentication[2] = false;
+						}
+					}, 60);
+
+				}
+
+			} else {
+				// Restricted to admin
+			}
+		}
+
+		*/
 
 		else if ((parseMessage == prefix + "checkram") || (parseMessage == prefix + "checkmem") || (parseMessage == prefix + "checkmemory")) {
 			msg.reply("Checking the memory status . . . ")
@@ -688,19 +828,19 @@ client.on('message', (msg) => {
 			Hated Commands
 		*/
 		else if ((parseMessage == prefix + "clear hate") || (parseMessage == prefix + "clearhate")){
-			unloved = null;
+			guildData["unloved"]= null;
 			msg.reply("All are loved");
 		}
 		else if ((parseMessage == prefix + "fuck you") || (parseMessage == prefix + "fu")) {
-			unloved = msg.author;
+			guildData["unloved"] = msg.author;
 			msg.reply("Go fuck yourself :^)");
 		}
 		else if (parseMessage == prefix + "hated") {
-			if (unloved == null){
+			if (guildData["unloved"] == null){
 				msg.reply("I love all!");
 			}
 			else {
-				msg.channel.send("I don't have much liking for @" + `${unloved.id} ...`);
+				msg.channel.send("I don't have much liking for @" + `${guildData["unloved"].id} ...`);
 			}
 		}
 		/*
@@ -963,6 +1103,7 @@ client.on('message', (msg) => {
 			
 		}
 
+		/*
 		else if (parseMessage.startsWith(prefix + "porn")){
 
 			var query = parseForQuery(msg.content, ["porn"]);
@@ -978,6 +1119,7 @@ client.on('message', (msg) => {
 			}
 			
 		}
+		*/
 		else if (parseMessage.startsWith(prefix + "youtube")){
 
 			var query = parseForQuery(msg.content, ["youtube"]);
@@ -1065,11 +1207,142 @@ http://www.gogoanime.to/?s=" + encodeURIComponent(query) + " \n \
 // SERVER MANAGEMENT ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-function startScheduledTasks(){
+var server_dir = "C:/Users/Mike/Desktop/Minecraft_Server"
+var serverWarningStart = "IfWinExist, DeveloperBlue's Minecraft Server 2.0\n {\n WinActivate\n SetKeyDelay -1 \n BlockInput On \n Send, {BackSpace}say "
+var serverWarningEnd = "\nBlockInput Off \n return\n}"
 
-	var server_dir = "C:/Users/Mike/Desktop/Minecraft_Server"
-	var serverWarningStart = "IfWinExist, DeveloperBlue's Minecraft Server 2.0\n {\n WinActivate\n SetKeyDelay -1 \n BlockInput On \n Send, {BackSpace}say "
-    var serverWarningEnd = "\nBlockInput Off \n return\n}"
+
+function sendWarning(message){
+	fs.writeFile(server_dir + "/Warning.ahk", serverWarningStart+message+serverWarningEnd, function(err) {
+		if(err) {
+			return console.log(err);
+		}
+
+		console.log("Sending warning - " + message);
+
+		exec(server_dir + "/Warning.ahk", function( error, stdout, stderr){
+
+			if ( error != null ) {
+				console.log(stderr);
+
+			} else {
+
+			}
+		});
+
+	});
+
+}
+
+function launchMinecraftServer(){
+	console.log("Attempting to launch Minecraft server . . .");
+
+	exec(server_dir + "/AuroraBotLauncher.ahk", {cwd: server_dir}, function( error3, stdout3, stderr3){
+
+		if ( error3 != null ) {
+			console.log(stderr3);
+
+		} else {
+
+			isBackingUp = false;
+			isBackupComplete = true;
+
+			console.log("Server successfully launched.");
+		}
+	});
+}
+
+function restartMinecraftServer(doBackup){
+
+	sendWarning("[Aurora]: The server will temporarily close for automatic backup. {Enter}");
+
+	exec('tasklist /fi "windowtitle eq DeveloperBlue\'s Minecraft Server 2.0"', function(err, stdout, stderr){
+		if (stdout.indexOf("INFO: No tasks are running which match the specified criteria.") == -1){
+
+			console.log("Attempting to stop server . . .");
+
+			isBackingUp = true;
+			isBackupComplete = false;
+
+			exec(server_dir + "/CloseMinecraftServer.ahk", function( error2, stdout2, stderr2){
+				if ( error2 != null ) {
+					console.log(stderr2);
+					// error handling & exit
+				} else {
+
+					console.log("Pausing for server close . . .");
+
+					setTimeout( function(){
+
+						console.log("Attempting to backup server . . .");
+
+						var getDate = dateTime.create().format('Y-m-d_H-M-S');
+						var output = fs.createWriteStream(server_dir + "/Backup/world_backup_"+getDate+".zip");
+						var archive = archiver('zip', {
+							zlib: { level: 9 } // Sets the compression level.
+						});
+
+						output.on('close', function() {
+
+							console.log(archive.pointer() + ' total bytes');
+							console.log('Server was successfully backed up.');
+
+							isBackingUp = false;
+							isBackupComplete = false;
+
+							launchMinecraftServer();
+
+						});
+
+						archive.on('warning', function(err) {
+
+							if (err.code === 'ENOENT') {
+								// log warning
+							} else {
+								// throw error
+
+								isBackingUp = false;
+								isBackupComplete = false;
+
+								throw err;
+							}
+						});
+
+						// good practice to catch this error explicitly
+						archive.on('error', function(err) {
+
+							isBackingUp = false;
+							isBackupComplete = false;
+
+							throw err;
+						});
+
+						archive.pipe(output);
+
+						archive.directory(server_dir+"/world", "/world");
+						archive.directory(server_dir+"/world_nether", "/world_nether");
+						archive.directory(server_dir+"/world_the_end", "/world_the_end");
+
+						archive.finalize();
+
+						console.log("Finished running save commands - waiting for actual save");
+
+					}, 20000);
+
+				}
+				
+				// normal 
+
+			});
+
+		} else {
+			console.log("The server is not running for scheduled shut down.");
+			return "NoRunning"
+		}
+	});
+}
+
+function startScheduledTasks(){
 
     var isBackingUp = false;
     var isBackupComplete = false;
@@ -1077,28 +1350,6 @@ function startScheduledTasks(){
     var warningHour = backupHour - 1;
 
 	console.log("Scheduled Tasks Online");
-
-	function sendWarning(message){
-		fs.writeFile(server_dir + "/Warning.ahk", serverWarningStart+message+serverWarningEnd, function(err) {
-			if(err) {
-				return console.log(err);
-			}
-
-			console.log("Sending warning - " + message);
-
-			exec(server_dir + "/Warning.ahk", function( error, stdout, stderr){
-
-				if ( error != null ) {
-					console.log(stderr);
-
-				} else {
-
-				}
-			});
-
-		});
-
-	}
 
 	/*
 	schedule.scheduleJob('* 12 * * *', function(){
@@ -1134,107 +1385,14 @@ function startScheduledTasks(){
 		// The server will temporarily close for automatic backup. It will be back up shortly.
 		console.log("Starting scheduled shut down . . . ");
 
-		sendWarning("[Aurora]: The server will temporarily close for automatic backup. {Enter}");
-
-		exec('tasklist /fi "windowtitle eq DeveloperBlue\'s Minecraft Server 2.0"', function(err, stdout, stderr){
-			if (stdout.indexOf("INFO: No tasks are running which match the specified criteria.") == -1){
-
-				console.log("Attempting to stop server . . .");
-
-				isBackingUp = true;
-				isBackupComplete = false;
-
-				exec(server_dir + "/CloseMinecraftServer.ahk", function( error2, stdout2, stderr2){
-					if ( error2 != null ) {
-						console.log(stderr2);
-						// error handling & exit
-					} else {
-
-						console.log("Pausing for server close . . .");
-
-						setTimeout( function(){
-
-							console.log("Attempting to backup server . . .");
-
-							var getDate = dateTime.create().format('Y-m-d_H-M-S');
-							var output = fs.createWriteStream(server_dir + "/Backup/world_backup_"+getDate+".zip");
-							var archive = archiver('zip', {
-								zlib: { level: 9 } // Sets the compression level.
-							});
-
-							output.on('close', function() {
-
-								console.log(archive.pointer() + ' total bytes');
-								console.log('Server was successfully backed up.');
-
-								isBackingUp = false;
-								isBackupComplete = false;
-
-								console.log("Attempting to relaunch server . . .");
-
-								exec(server_dir + "/AuroraBotLauncher.ahk", {cwd: server_dir}, function( error3, stdout3, stderr3){
-
-									if ( error3 != null ) {
-										console.log(stderr3);
-
-									} else {
-
-										isBackingUp = false;
-										isBackupComplete = true;
-
-										console.log("Server successfully launched.");
-									}
-								});
-
-							});
-
-							archive.on('warning', function(err) {
-
-								if (err.code === 'ENOENT') {
-									// log warning
-								} else {
-									// throw error
-
-									isBackingUp = false;
-									isBackupComplete = false;
-
-									throw err;
-								}
-							});
-
-							// good practice to catch this error explicitly
-							archive.on('error', function(err) {
-
-								isBackingUp = false;
-								isBackupComplete = false;
-
-								throw err;
-							});
-
-							archive.pipe(output);
-
-							archive.directory(server_dir+"/world", "/world");
-							archive.directory(server_dir+"/world_nether", "/world_nether");
-							archive.directory(server_dir+"/world_the_end", "/world_the_end");
-
-							archive.finalize();
-
-							console.log("Finished running save commands - waiting for actual save");
-
-						}, 20000);
-
-					}
-					
-					// normal 
-
-				});
-
-			} else {
-				console.log("The server is not running for scheduled shut down.");
-			}
-		});
+		restartMinecraftServer(true);
 
 	});
+
+	// 9 O' clock on a Saturday
+	// Play billy Joel's 9 O'clock on a Saturday
+
+	// 12am daily - It's high noon'
 
 
 }
@@ -1245,13 +1403,13 @@ function startScheduledTasks(){
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-client.login('TOKEN');
-// TOKEN removed due to security issues. Input your own bot's token here!
-// https://discordapp.com/developers/docs/intro
+client.login('ClientId');
 
 /*
 
 Michael Rooplall | DeveloperBlue
 
+MichaelRooplall@gmail.com
 
 */
+
